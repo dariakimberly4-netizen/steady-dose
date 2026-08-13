@@ -8,13 +8,16 @@ function notify(text){toast.textContent=text;toast.classList.add('show');setTime
 function busy(text='Loading…'){screen.innerHTML=`<div class="loading"><b>SD</b><strong>${esc(text)}</strong></div>`}
 function authView(){
  nav.hidden=true;account.textContent='?';
- screen.innerHTML=`<div class="auth"><small>PRIVATE & SECURE</small><h1>Welcome to Steady Dose</h1><p>Patients and invited caregivers use their Google account. No separate password is needed.</p><button class="google" id="google-signin"><span>G</span> CONTINUE WITH GOOGLE</button><p class="privacy">🔒 Your Google password is never shared with Steady Dose.</p></div>`;
- document.querySelector('#google-signin').onclick=signInGoogle;
+ screen.innerHTML=`<div class="auth"><small>PRIVATE & SECURE</small><h1>Welcome to Steady Dose</h1><p>Enter your email. We will send a secure sign-in link. No password is required.</p><form class="invite-form" id="email-signin"><label>Email address<input name="email" type="email" autocomplete="email" required placeholder="you@example.com"></label><button class="google" type="submit">EMAIL MY SIGN-IN LINK</button></form><p class="privacy">🔒 Open the link in your email to sign in securely.</p></div>`;
+ document.querySelector('#email-signin').onsubmit=signInEmail;
 }
-async function signInGoogle(){
- busy('Opening Google Sign-In…');
- const {error}=await db.auth.signInWithOAuth({provider:'google',options:{redirectTo:'https://dariakimberly4-netizen.github.io/steady-dose/',queryParams:{prompt:'select_account'}}});
- if(error){authView();notify(error.message)}
+async function signInEmail(e){
+ e.preventDefault();
+ const email=new FormData(e.target).get('email').trim().toLowerCase();
+ const button=e.target.querySelector('button');button.disabled=true;button.textContent='SENDING…';
+ const {error}=await db.auth.signInWithOtp({email,options:{emailRedirectTo:'https://dariakimberly4-netizen.github.io/steady-dose/'}});
+ if(error){button.disabled=false;button.textContent='EMAIL MY SIGN-IN LINK';notify(error.message)}
+ else{screen.innerHTML=`<div class="auth"><small>CHECK YOUR EMAIL</small><h1>Sign-in link sent</h1><p>We sent a secure link to <strong>${esc(email)}</strong>.</p><p>Open that link to enter Steady Dose.</p><button class="google" onclick="authView()">USE ANOTHER EMAIL</button></div>`;}
 }
 async function ensureProfile(){
  let {data}=await db.from('profiles').select('*').eq('id',session.user.id).maybeSingle();
@@ -82,7 +85,7 @@ async function removeCaregiver(caregiverId){if(!confirm('Remove this caregiver�
 function care(){
  const taken=doses.filter(d=>['taken','late'].includes(d.status)).length,pct=doses.length?Math.round(taken/doses.length*100):0;
  if(profile.role==='caregiver')return `<div class="title"><small>CAREGIVER VIEW</small><h1>Shared patient summary</h1><p>You can only view information this patient shared.</p></div><div class="summary"><div><b>${pct}%</b><small>Adherence</small></div><div><b>${doses.filter(d=>d.status==='skipped').length}</b><small>Missed</small></div><div><b>${journal.length}</b><small>Check-ins</small></div></div><button class="report" onclick="backToCare()">← CHANGE PATIENT</button>`;
- return `<div class="title"><small>CARE CIRCLE</small><h1>Invite a caregiver</h1><p>Enter their Gmail address. They must continue with that Google account and accept.</p></div><form class="invite-form" onsubmit="sendInvite(event)"><label>Caregiver Gmail<input name="email" type="email" required placeholder="caregiver@gmail.com"></label><button class="report">INVITE CAREGIVER</button></form><h3>Connected caregivers</h3><div class="permissions">${caregiverLinks.map(c=>`<section><strong>${esc(c.profiles?.full_name||'Caregiver')}</strong><label><input type="checkbox" ${c.can_view?'checked':''} onchange="setPermission('${c.caregiver_id}','can_view',this.checked)"> Can view records</label><label><input type="checkbox" ${c.can_log_doses?'checked':''} onchange="setPermission('${c.caregiver_id}','can_log_doses',this.checked)"> Can log doses</label><button onclick="removeCaregiver('${c.caregiver_id}')">REMOVE ACCESS</button></section>`).join('')||'<div class="empty"><strong>No connected caregivers.</strong><span>Invitations must be accepted first.</span></div>'}</div><p class="privacy">🔒 You control each caregiver’s access.</p>`;
+ return `<div class="title"><small>CARE CIRCLE</small><h1>Invite a caregiver</h1><p>Enter their email address. They must sign in and accept before access is granted.</p></div><form class="invite-form" onsubmit="sendInvite(event)"><label>Caregiver email<input name="email" type="email" required placeholder="caregiver@example.com"></label><button class="report">INVITE CAREGIVER</button></form><h3>Connected caregivers</h3><div class="permissions">${caregiverLinks.map(c=>`<section><strong>${esc(c.profiles?.full_name||'Caregiver')}</strong><label><input type="checkbox" ${c.can_view?'checked':''} onchange="setPermission('${c.caregiver_id}','can_view',this.checked)"> Can view records</label><label><input type="checkbox" ${c.can_log_doses?'checked':''} onchange="setPermission('${c.caregiver_id}','can_log_doses',this.checked)"> Can log doses</label><button onclick="removeCaregiver('${c.caregiver_id}')">REMOVE ACCESS</button></section>`).join('')||'<div class="empty"><strong>No connected caregivers.</strong><span>Invitations must be accepted first.</span></div>'}</div><p class="privacy">🔒 You control each caregiver’s access.</p>`;
 }
 function backToCare(){patientId=null;loadCaregiverHome()}
 function render(){nav.hidden=false;account.textContent=(profile.full_name||'?').slice(0,2).toUpperCase();screen.innerHTML=tab==='today'?today():tab==='schedule'?schedule():tab==='journal'?journalView():care()}
